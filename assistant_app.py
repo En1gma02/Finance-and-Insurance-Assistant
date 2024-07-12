@@ -2,7 +2,7 @@ import streamlit as st
 import pandas as pd
 import os
 import io
-from huggingface_hub import InferenceClient
+import requests
 from dotenv import load_dotenv
 import speech_recognition as sr
 from streamlit_audio_recorder import audio_recorder
@@ -10,6 +10,9 @@ from streamlit_audio_recorder import audio_recorder
 # Load environment variables from .env file
 load_dotenv()
 
+# Define API URL and API key
+API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B"
+HF_API_TOKEN = "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"
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -32,11 +35,9 @@ def load_data():
 
     return fine_tuning_data, fitness_discount_data
 
-
 # Function to clear chat history
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
-
 
 # Function to predict discount based on fitness score
 def predict_discount(fitness_score):
@@ -51,10 +52,9 @@ def predict_discount(fitness_score):
     elif fitness_score >= 50:
         return 10  # 10% discount
     elif fitness_score >= 40:
-        return 5  # 5% discount
+        return 5   # 5% discount
     else:
-        return 0  # No discount
-
+        return 0   # No discount
 
 # Function to generate AI assistant response
 def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data, fitness_discount_data):
@@ -136,16 +136,15 @@ def ai_assistant_page():
     # Define sidebar for AI Assistant configurations
     with st.sidebar:
         st.title('🏛️🔍 AI-Assistant Settings')
-        hf_api_token = "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"
-        if hf_api_token:
+        if HF_API_TOKEN:
             st.success('API key loaded from environment variable!', icon='✅')
         else:
             st.error('API key not found. Please set the HUGGINGFACE_API_TOKEN environment variable.', icon='🚨')
 
         # Initialize the InferenceClient
         client = InferenceClient(
-            "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            token=hf_api_token
+            "meta-llama/Meta-Llama-3-8B",
+            token=HF_API_TOKEN
         )
 
         st.button('Clear Chat History', on_click=clear_chat_history)
