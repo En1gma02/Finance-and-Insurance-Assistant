@@ -7,7 +7,6 @@ import speech_recognition as sr
 from audio_recorder_streamlit import audio_recorder
 import requests
 from io import BytesIO
-from huggingface_hub import InferenceClient
 
 # Load environment variables from .env file
 load_dotenv()
@@ -15,13 +14,11 @@ load_dotenv()
 # Hugging Face API setup
 HF_API_KEY_CHAT = "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"
 HF_API_KEY_TTS = "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"
-chat_client = InferenceClient(
-    "mistralai/Mixtral-8x7B-Instruct-v0.1",
-    token=HF_API_KEY_CHAT,
-)
 
+CHAT_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
-TTS_HEADERS = {"Authorization": f"Bearer {HF_API_KEY_TTS}"}
+HEADERS_CHAT = {"Authorization": f"Bearer {HF_API_KEY_CHAT}"}
+HEADERS_TTS = {"Authorization": f"Bearer {HF_API_KEY_TTS}"}
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -84,14 +81,17 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
 
     try:
         messages = [{"role": "system", "content": system_message}, {"role": "user", "content": prompt_input}]
-        response = chat_client.chat_completion(messages=messages, max_tokens=150)
-        return response.choices[0].delta.content.strip()
+        payload = {"inputs": {"past_user_inputs": [], "generated_responses": [], "text": prompt_input}}
+        response = requests.post(CHAT_API_URL, headers=HEADERS_CHAT, json=payload)
+        response.raise_for_status()
+        result = response.json()
+        return result["generated_text"].strip()
     except Exception as e:
         return f"Error: Unable to generate response. {e}"
 
 def text_to_speech(text):
     payload = {"inputs": text}
-    response = requests.post(TTS_API_URL, headers=TTS_HEADERS, json=payload)
+    response = requests.post(TTS_API_URL, headers=HEADERS_TTS, json=payload)
     return response.content if response.status_code == 200 else None
 
 def transcribe_speech(audio_bytes):
