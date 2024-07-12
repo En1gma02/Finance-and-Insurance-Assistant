@@ -1,6 +1,5 @@
 streamlit==1.24.0
 pandas==1.5.3
-huggingface_hub
 python-dotenv==1.0.0
 SpeechRecognition==3.10.0
 requests==2.31.0
