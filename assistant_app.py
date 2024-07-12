@@ -57,7 +57,7 @@ def predict_discount(fitness_score):
         return 0   # No discount
 
 # Function to generate AI assistant response
-def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data, fitness_discount_data):
+def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitness_discount_data):
     system_message = "You are a consultant with expertise in personal finance and insurance. Provide crisp and short responses."
 
     if fine_tuning_data:
@@ -73,20 +73,21 @@ def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data
     except ValueError:
         pass
 
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": prompt_input}
-    ]
+    payload = {
+        "inputs": prompt_input,
+    }
 
-    response = ""
-    for message in client.chat_completion(
-            messages=messages,
-            max_tokens=120,
-            stream=True
-    ):
-        response += message.choices[0].delta.content or ""
+    headers = {
+        "Authorization": f"Bearer {HF_API_TOKEN}",
+        "Content-Type": "application/json"
+    }
 
-    return response
+    response = requests.post(API_URL, headers=headers, json=payload)
+
+    if response.status_code == 200:
+        return response.json()['generated_text']
+    else:
+        return "Error fetching response from AI assistant."
 
 def transcribe_speech():
     st.write("Click the microphone to start recording")
@@ -141,12 +142,6 @@ def ai_assistant_page():
         else:
             st.error('API key not found. Please set the HUGGINGFACE_API_TOKEN environment variable.', icon='🚨')
 
-        # Initialize the InferenceClient
-        client = InferenceClient(
-            "meta-llama/Meta-Llama-3-8B",
-            token=HF_API_TOKEN
-        )
-
         st.button('Clear Chat History', on_click=clear_chat_history)
 
     # Initialize session state for messages
@@ -169,7 +164,7 @@ def ai_assistant_page():
         speech_text = transcribe_speech()
         if speech_text:
             st.session_state.messages.append({"role": "user", "content": speech_text})
-            response = generate_insurance_assistant_response(speech_text, client, fine_tuning_data, fitness_discount_data)
+            response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.experimental_rerun()
 
@@ -180,10 +175,11 @@ def ai_assistant_page():
 
     if submit_button and user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        response = generate_insurance_assistant_response(user_input, client, fine_tuning_data, fitness_discount_data)
+        response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.experimental_rerun()
 
 # Run the app
 if __name__ == "__main__":
     ai_assistant_page()
+s
