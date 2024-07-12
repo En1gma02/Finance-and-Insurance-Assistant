@@ -13,7 +13,7 @@ load_dotenv()
 
 # Hugging Face API setup for text-to-speech
 HF_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
-HF_API_KEY = "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"
+HF_API_KEY = os.getenv("HF_API_KEY")
 HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
 
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
@@ -40,11 +40,9 @@ def load_data():
 
     return fine_tuning_data, fitness_discount_data
 
-
 # Function to clear chat history
 def clear_chat_history():
     st.session_state.messages = [{"role": "assistant", "content": "How may I assist you today?"}]
-
 
 # Function to predict discount based on fitness score
 def predict_discount(fitness_score):
@@ -62,7 +60,6 @@ def predict_discount(fitness_score):
         return 5  # 5% discount
     else:
         return 0  # No discount
-
 
 # Function to generate AI assistant response
 def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitness_discount_data):
@@ -93,27 +90,22 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
     else:
         return f"Error: Unable to generate response. Status code: {response.status_code}"
 
-
 def text_to_speech(text):
     payload = {"inputs": text}
     response = requests.post(TTS_API_URL, headers=TTS_HEADERS, json=payload)
     return response.content if response.status_code == 200 else None
 
-def transcribe_speech():
-    st.write("Click the microphone to start recording")
-    audio_bytes = audio_recorder(text="", icon_size="2x")
-    if audio_bytes:
-        try:
-            r = sr.Recognizer()
-            audio_file = sr.AudioFile(io.BytesIO(audio_bytes))
-            with audio_file as source:
-                audio_data = r.record(source)
-            text = r.recognize_google(audio_data)
-            return text
-        except Exception as e:
-            st.error(f"Error transcribing audio: {e}")
-            return None
-    return None
+def transcribe_speech(audio_bytes):
+    try:
+        r = sr.Recognizer()
+        audio_file = sr.AudioFile(io.BytesIO(audio_bytes))
+        with audio_file as source:
+            audio_data = r.record(source)
+        text = r.recognize_google(audio_data)
+        return text
+    except Exception as e:
+        st.error(f"Error transcribing audio: {e}")
+        return None
 
 # Define the AI Assistant page
 def ai_assistant_page():
@@ -156,7 +148,7 @@ def ai_assistant_page():
     # Display chat history
     chat_container = st.container()
     with chat_container:
-        for i, message in enumerate(st.session_state.messages):
+        for message in st.session_state.messages:
             container_class = "user-container" if message['role'] == "user" else "assistant-container"
             st.markdown(f"""
             <div class="{container_class}">
@@ -166,36 +158,34 @@ def ai_assistant_page():
 
             # Add text-to-speech button for assistant messages
             if message['role'] == "assistant":
-                if st.button(f"🔊 Listen {i}", key=f"tts_{i}"):
+                if st.button(f"🔊 Listen", key=f"tts_{len(st.session_state.messages)}"):
                     audio_bytes = text_to_speech(message['content'])
-                    if audio_bytes:
-                        st.audio(audio_bytes, format='audio/wav')
-
-    # Speech-to-text option
-    if st.button("Use Voice Input"):
-        speech_text = transcribe_speech()
-        if speech_text:
-            st.session_state.messages.append({"role": "user", "content": speech_text})
-            response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.experimental_rerun()
+                    st.audio(audio_bytes, format='audio/wav')
 
     # Handle user input and generate responses
-    with st.form(key='chat_form', clear_on_submit=True):
-        user_input = st.text_input("Type your message here:", key="user_input")
-        submit_button = st.form_submit_button("Send")
-
-    if submit_button and user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    user_input_container = st.container()
+    with user_input_container:
+        user_input_col, mic_col = st.columns([0.8, 0.2])
+        with user_input_col:
+            user_input = st.text_input("Type your message here:", key="user_input")
+        with mic_col:
+            audio_bytes = audio_recorder(text="", icon_size="2x")
+            if audio_bytes:
+                speech_text = transcribe_speech(audio_bytes)
+                if speech_text:
+                    st.session_state.messages.append({"role": "user", "content": speech_text})
+                    response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.experimental_rerun()
         
-        # Automatically generate and play audio for the assistant's response
-        audio_bytes = text_to_speech(response)
-        if audio_bytes:
-            st.audio(audio_bytes, format='audio/wav')
-        
-        st.experimental_rerun()
+        if st.button("Send"):
+            st.session_state.messages.append({"role": "user", "content": user_input})
+            response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            audio_bytes = text_to_speech(response)
+            if audio_bytes:
+                st.audio(audio_bytes, format='audio/wav')
+            st.experimental_rerun()
 
 # Run the app
 if __name__ == "__main__":
