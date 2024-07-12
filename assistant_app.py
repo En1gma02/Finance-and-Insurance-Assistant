@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 import os
 import io
-from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 import speech_recognition as sr
 from audio_recorder_streamlit import audio_recorder
@@ -17,10 +16,8 @@ TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tt
 HF_API_KEY = "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"
 TTS_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
 
-def text_to_speech(text):
-    payload = {"inputs": text}
-    response = requests.post(TTS_API_URL, headers=TTS_HEADERS, json=payload)
-    return response.content
+TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
+TTS_HEADERS = HF_HEADERS
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -98,6 +95,11 @@ def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data
         response += message.choices[0].delta.content or ""
 
     return response
+
+def text_to_speech(text):
+    payload = {"inputs": text}
+    response = requests.post(TTS_API_URL, headers=TTS_HEADERS, json=payload)
+    return response.content if response.status_code == 200 else None
 
 def transcribe_speech():
     st.write("Click the microphone to start recording")
@@ -198,13 +200,14 @@ def ai_assistant_page():
 
     if submit_button and user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        response = generate_insurance_assistant_response(user_input, client, fine_tuning_data, fitness_discount_data)
+        response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
         st.session_state.messages.append({"role": "assistant", "content": response})
-
+        
         # Automatically generate and play audio for the assistant's response
         audio_bytes = text_to_speech(response)
-        st.audio(audio_bytes, format='audio/wav')
-
+        if audio_bytes:
+            st.audio(audio_bytes, format='audio/wav')
+        
         st.experimental_rerun()
 
 # Run the app
