@@ -5,7 +5,7 @@ import io
 from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 import speech_recognition as sr
-from streamlit_audio_recorder import audio_recorder
+from audio_recorder_streamlit import audio_recorder
 import requests
 from io import BytesIO
 
