@@ -7,17 +7,21 @@ import speech_recognition as sr
 from audio_recorder_streamlit import audio_recorder
 import requests
 from io import BytesIO
+from huggingface_hub import InferenceClient
 
 # Load environment variables from .env file
 load_dotenv()
 
-# Hugging Face API setup for text-to-speech
-HF_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
-HF_API_KEY = os.getenv("HF_API_KEY")
-HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
+# Hugging Face API setup
+HF_API_KEY_CHAT = "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"
+HF_API_KEY_TTS = "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"
+chat_client = InferenceClient(
+    "mistralai/Mixtral-8x7B-Instruct-v0.1",
+    token=HF_API_KEY_CHAT,
+)
 
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
-TTS_HEADERS = HF_HEADERS
+TTS_HEADERS = {"Authorization": f"Bearer {HF_API_KEY_TTS}"}
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -78,17 +82,12 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
     except ValueError:
         pass
 
-    payload = {
-        "inputs": f"{system_message}\n\nHuman: {prompt_input}\nAssistant:",
-        "parameters": {"max_new_tokens": 150, "temperature": 0.7, "top_p": 0.95}
-    }
-
-    response = requests.post(HF_API_URL, headers=HF_HEADERS, json=payload)
-    
-    if response.status_code == 200:
-        return response.json()[0]['generated_text'].split("Assistant:")[-1].strip()
-    else:
-        return f"Error: Unable to generate response. Status code: {response.status_code}"
+    try:
+        messages = [{"role": "system", "content": system_message}, {"role": "user", "content": prompt_input}]
+        response = chat_client.chat_completion(messages=messages, max_tokens=150)
+        return response.choices[0].delta.content.strip()
+    except Exception as e:
+        return f"Error: Unable to generate response. {e}"
 
 def text_to_speech(text):
     payload = {"inputs": text}
@@ -169,7 +168,7 @@ def ai_assistant_page():
                 if speech_text:
                     st.session_state.user_input = speech_text
                     st.experimental_rerun()
-        
+
         if st.button("Send"):
             st.session_state.messages.append({"role": "user", "content": user_input})
             response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
