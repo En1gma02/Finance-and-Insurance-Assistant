@@ -156,7 +156,7 @@ def ai_assistant_page():
     # Display chat history
     chat_container = st.container()
     with chat_container:
-        for message in st.session_state.messages:
+        for i, message in enumerate(st.session_state.messages):
             container_class = "user-container" if message['role'] == "user" else "assistant-container"
             st.markdown(f"""
             <div class="{container_class}">
@@ -166,16 +166,17 @@ def ai_assistant_page():
 
             # Add text-to-speech button for assistant messages
             if message['role'] == "assistant":
-                if st.button(f"🔊 Listen", key=f"tts_{len(st.session_state.messages)}"):
+                if st.button(f"🔊 Listen {i}", key=f"tts_{i}"):
                     audio_bytes = text_to_speech(message['content'])
-                    st.audio(audio_bytes, format='audio/wav')
+                    if audio_bytes:
+                        st.audio(audio_bytes, format='audio/wav')
 
     # Speech-to-text option
     if st.button("Use Voice Input"):
         speech_text = transcribe_speech()
         if speech_text:
             st.session_state.messages.append({"role": "user", "content": speech_text})
-            response = generate_insurance_assistant_response(speech_text, client, fine_tuning_data, fitness_discount_data)
+            response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.experimental_rerun()
 
