@@ -156,12 +156,6 @@ def ai_assistant_page():
             </div>
             """, unsafe_allow_html=True)
 
-            # Add text-to-speech button for assistant messages
-            if message['role'] == "assistant":
-                if st.button(f"🔊 Listen", key=f"tts_{len(st.session_state.messages)}"):
-                    audio_bytes = text_to_speech(message['content'])
-                    st.audio(audio_bytes, format='audio/wav')
-
     # Handle user input and generate responses
     user_input_container = st.container()
     with user_input_container:
@@ -182,10 +176,15 @@ def ai_assistant_page():
             st.session_state.messages.append({"role": "user", "content": user_input})
             response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
             st.session_state.messages.append({"role": "assistant", "content": response})
-            audio_bytes = text_to_speech(response)
+            st.experimental_rerun()
+
+    # Add a single button for text-to-speech for the most recent assistant response
+    if st.session_state.messages and st.session_state.messages[-1]['role'] == "assistant":
+        if st.button("🔊 Listen to Last Response"):
+            last_response = st.session_state.messages[-1]['content']
+            audio_bytes = text_to_speech(last_response)
             if audio_bytes:
                 st.audio(audio_bytes, format='audio/wav')
-            st.experimental_rerun()
 
 # Run the app
 if __name__ == "__main__":
