@@ -6,6 +6,7 @@ import requests
 from dotenv import load_dotenv
 import speech_recognition as sr
 from audio_recorder_streamlit import audio_recorder
+from transformers import AutoTokenizer, AutoModelForCausalLM
 
 # Load environment variables from .env file
 load_dotenv()
@@ -13,6 +14,10 @@ load_dotenv()
 # Define API URL and API key
 API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B"
 HF_API_TOKEN = "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"
+
+# Load tokenizer and model directly
+tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B")
+model = AutoModelForCausalLM.from_pretrained("meta-llama/Meta-Llama-3-8B")
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -73,21 +78,10 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
     except ValueError:
         pass
 
-    payload = {
-        "inputs": prompt_input,
-    }
-
-    headers = {
-        "Authorization": f"Bearer {HF_API_TOKEN}",
-        "Content-Type": "application/json"
-    }
-
-    response = requests.post(API_URL, headers=headers, json=payload)
-
-    if response.status_code == 200:
-        return response.json()['generated_text']
-    else:
-        return "Error fetching response from AI assistant."
+    input_ids = tokenizer(prompt_input, return_tensors="pt").input_ids
+    output = model.generate(input_ids, max_length=50, num_return_sequences=1, early_stopping=True)
+    response = tokenizer.decode(output[0], skip_special_tokens=True)
+    return response
 
 def transcribe_speech():
     st.write("Click the microphone to start recording")
