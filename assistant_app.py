@@ -12,8 +12,8 @@ from io import BytesIO
 load_dotenv()
 
 # Hugging Face API setup
-HF_API_KEY_CHAT = "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"
-HF_API_KEY_TTS = "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"
+HF_API_KEY_CHAT = os.getenv("HF_API_KEY_CHAT")
+HF_API_KEY_TTS = os.getenv("HF_API_KEY_TTS")
 
 CHAT_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
@@ -81,12 +81,12 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
 
     try:
         messages = [{"role": "system", "content": system_message}, {"role": "user", "content": prompt_input}]
-        payload = {"inputs": {"past_user_inputs": [], "generated_responses": [], "text": prompt_input}}
+        payload = {"inputs": prompt_input}
         response = requests.post(CHAT_API_URL, headers=HEADERS_CHAT, json=payload)
         response.raise_for_status()
         result = response.json()
         return result["generated_text"].strip()
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return f"Error: Unable to generate response. {e}"
 
 def text_to_speech(text):
@@ -170,10 +170,11 @@ def ai_assistant_page():
                     st.experimental_rerun()
 
         if st.button("Send"):
-            st.session_state.messages.append({"role": "user", "content": user_input})
-            response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.experimental_rerun()
+            if user_input:
+                st.session_state.messages.append({"role": "user", "content": user_input})
+                response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
+                st.session_state.messages.append({"role": "assistant", "content": response})
+                st.experimental_rerun()
 
     # Handle speech input
     if "user_input" in st.session_state:
