@@ -12,8 +12,8 @@ from io import BytesIO
 load_dotenv()
 
 # Hugging Face API setup
-HF_API_KEY_CHAT = os.getenv("HF_API_KEY_CHAT")
-HF_API_KEY_TTS = os.getenv("HF_API_KEY_TTS")
+HF_API_KEY_CHAT = "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"
+HF_API_KEY_TTS = "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"
 
 CHAT_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
