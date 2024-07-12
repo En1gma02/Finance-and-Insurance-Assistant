@@ -147,18 +147,6 @@ def ai_assistant_page():
     # Define sidebar for AI Assistant configurations
     with st.sidebar:
         st.title('🏛️🔍 AI-Assistant Settings')
-        hf_api_token = "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"
-        if hf_api_token:
-            st.success('API key loaded from environment variable!', icon='✅')
-        else:
-            st.error('API key not found. Please set the HUGGINGFACE_API_TOKEN environment variable.', icon='🚨')
-
-        # Initialize the InferenceClient
-        client = InferenceClient(
-            "mistralai/Mixtral-8x7B-Instruct-v0.1",
-            token=hf_api_token
-        )
-
         st.button('Clear Chat History', on_click=clear_chat_history)
 
     # Initialize session state for messages
