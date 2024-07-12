@@ -167,9 +167,7 @@ def ai_assistant_page():
             if audio_bytes:
                 speech_text = transcribe_speech(audio_bytes)
                 if speech_text:
-                    st.session_state.messages.append({"role": "user", "content": speech_text})
-                    response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
-                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.session_state.user_input = speech_text
                     st.experimental_rerun()
         
         if st.button("Send"):
@@ -177,6 +175,14 @@ def ai_assistant_page():
             response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
             st.session_state.messages.append({"role": "assistant", "content": response})
             st.experimental_rerun()
+
+    # Handle speech input
+    if "user_input" in st.session_state:
+        st.session_state.messages.append({"role": "user", "content": st.session_state.user_input})
+        response = generate_insurance_assistant_response(st.session_state.user_input, fine_tuning_data, fitness_discount_data)
+        st.session_state.messages.append({"role": "assistant", "content": response})
+        del st.session_state.user_input
+        st.experimental_rerun()
 
     # Add a single button for text-to-speech for the most recent assistant response
     if st.session_state.messages and st.session_state.messages[-1]['role'] == "assistant":
