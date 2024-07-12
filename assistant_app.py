@@ -12,9 +12,9 @@ from io import BytesIO
 load_dotenv()
 
 # Hugging Face API setup for text-to-speech
-TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
+HF_API_URL = "https://api-inference.huggingface.co/models/mistralai/Mixtral-8x7B-Instruct-v0.1"
 HF_API_KEY = "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"
-TTS_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
+HF_HEADERS = {"Authorization": f"Bearer {HF_API_KEY}"}
 
 TTS_API_URL = "https://api-inference.huggingface.co/models/microsoft/speecht5_tts"
 TTS_HEADERS = HF_HEADERS
