@@ -65,7 +65,7 @@ def predict_discount(fitness_score):
 
 
 # Function to generate AI assistant response
-def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data, fitness_discount_data):
+def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitness_discount_data):
     system_message = "You are a consultant with expertise in personal finance and insurance. Provide crisp and short responses."
 
     if fine_tuning_data:
@@ -81,20 +81,18 @@ def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data
     except ValueError:
         pass
 
-    messages = [
-        {"role": "system", "content": system_message},
-        {"role": "user", "content": prompt_input}
-    ]
+    payload = {
+        "inputs": f"{system_message}\n\nHuman: {prompt_input}\nAssistant:",
+        "parameters": {"max_new_tokens": 150, "temperature": 0.7, "top_p": 0.95}
+    }
 
-    response = ""
-    for message in client.chat_completion(
-            messages=messages,
-            max_tokens=120,
-            stream=True
-    ):
-        response += message.choices[0].delta.content or ""
+    response = requests.post(HF_API_URL, headers=HF_HEADERS, json=payload)
+    
+    if response.status_code == 200:
+        return response.json()[0]['generated_text'].split("Assistant:")[-1].strip()
+    else:
+        return f"Error: Unable to generate response. Status code: {response.status_code}"
 
-    return response
 
 def text_to_speech(text):
     payload = {"inputs": text}
