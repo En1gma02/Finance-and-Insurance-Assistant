@@ -2,22 +2,16 @@ import streamlit as st
 import pandas as pd
 import os
 import io
-import requests
+from huggingface_hub import InferenceClient
 from dotenv import load_dotenv
 import speech_recognition as sr
-from audio_recorder_streamlit import audio_recorder
-from transformers import AutoTokenizer, AutoModelForCausalLM
+from gtts import gTTS
+import pyaudio
+import wave
+import tempfile
 
 # Load environment variables from .env file
 load_dotenv()
-
-# Define API URL and API key
-API_URL = "https://api-inference.huggingface.co/models/meta-llama/Meta-Llama-3-8B"
-HF_API_TOKEN = "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"
-
-# Load tokenizer and model directly
-tokenizer = AutoTokenizer.from_pretrained("meta-llama/Meta-Llama-3-8B")
-model = AutoModelForCausalLM.from_pretrained("meta-llama/Meta-Llama-3-8B")
 
 # Function to load fine-tuning data and bot_score.csv
 def load_data():
@@ -62,7 +56,7 @@ def predict_discount(fitness_score):
         return 0   # No discount
 
 # Function to generate AI assistant response
-def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitness_discount_data):
+def generate_insurance_assistant_response(prompt_input, client, fine_tuning_data, fitness_discount_data):
     system_message = "You are a consultant with expertise in personal finance and insurance. Provide crisp and short responses."
 
     if fine_tuning_data:
@@ -78,33 +72,84 @@ def generate_insurance_assistant_response(prompt_input, fine_tuning_data, fitnes
     except ValueError:
         pass
 
-    input_ids = tokenizer(prompt_input, return_tensors="pt").input_ids
-    output = model.generate(input_ids, max_length=50, num_return_sequences=1, early_stopping=True)
-    response = tokenizer.decode(output[0], skip_special_tokens=True)
+    messages = [
+        {"role": "system", "content": system_message},
+        {"role": "user", "content": prompt_input}
+    ]
+
+    response = ""
+    for message in client.chat_completion(
+            messages=messages,
+            max_tokens=120,
+            stream=True
+    ):
+        response += message.choices[0].delta.content or ""
+
     return response
 
-def transcribe_speech():
-    st.write("Click the microphone to start recording")
-    audio_bytes = audio_recorder(text="", icon_size="2x")
-    if audio_bytes:
-        try:
-            r = sr.Recognizer()
-            audio_file = sr.AudioFile(io.BytesIO(audio_bytes))
-            with audio_file as source:
-                audio_data = r.record(source)
-            text = r.recognize_google(audio_data)
-            return text
-        except Exception as e:
-            st.error(f"Error transcribing audio: {e}")
-            return None
-    return None
+# Function to transcribe audio
+def transcribe_audio(audio_file_path):
+    try:
+        r = sr.Recognizer()
+        with sr.AudioFile(audio_file_path) as source:
+            audio_data = r.record(source)
+        text = r.recognize_google(audio_data)
+        return text
+    except Exception as e:
+        st.error(f"Error transcribing audio: {e}")
+        return None
+
+# Function to convert text to speech
+def text_to_speech(text):
+    tts = gTTS(text=text, lang='en')
+    audio_bytes = io.BytesIO()
+    tts.write_to_fp(audio_bytes)
+    audio_bytes.seek(0)
+    return audio_bytes.getvalue()
+
+# Function to record audio
+def record_audio(device_index, duration=5):
+    CHUNK = 1024
+    FORMAT = pyaudio.paInt16
+    CHANNELS = 1
+    RATE = 44100
+    RECORD_SECONDS = duration
+
+    p = pyaudio.PyAudio()
+
+    stream = p.open(format=FORMAT,
+                    channels=CHANNELS,
+                    rate=RATE,
+                    input=True,
+                    input_device_index=device_index,
+                    frames_per_buffer=CHUNK)
+
+    frames = []
+
+    for i in range(0, int(RATE / CHUNK * RECORD_SECONDS)):
+        data = stream.read(CHUNK)
+        frames.append(data)
+
+    stream.stop_stream()
+    stream.close()
+    p.terminate()
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".wav") as temp_audio_file:
+        wf = wave.open(temp_audio_file.name, 'wb')
+        wf.setnchannels(CHANNELS)
+        wf.setsampwidth(p.get_sample_size(FORMAT))
+        wf.setframerate(RATE)
+        wf.writeframes(b''.join(frames))
+        wf.close()
+
+    return temp_audio_file.name
 
 # Define the AI Assistant page
 def ai_assistant_page():
     st.title('AI Assistant')
     st.write("Your personal insurance and finance expert")
 
-    # Custom CSS for chat containers
+    # Custom CSS for chat containers and buttons
     st.markdown("""
     <style>
     .user-container {
@@ -122,6 +167,23 @@ def ai_assistant_page():
     .chat-text {
         color: #ffffff;
     }
+    .stButton > button {
+        width: 100%;
+        height: 40px;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        font-size: 16px;
+        cursor: pointer;
+    }
+    .stButton > button:hover {
+        background-color: #45a049;
+    }
+    .button-container {
+        display: flex;
+        justify-content: space-between;
+    }
     </style>
     """, unsafe_allow_html=True)
 
@@ -131,12 +193,32 @@ def ai_assistant_page():
     # Define sidebar for AI Assistant configurations
     with st.sidebar:
         st.title('🏛️🔍 AI-Assistant Settings')
-        if HF_API_TOKEN:
+        hf_api_token = "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"
+        if hf_api_token:
             st.success('API key loaded from environment variable!', icon='✅')
         else:
             st.error('API key not found. Please set the HUGGINGFACE_API_TOKEN environment variable.', icon='🚨')
 
+        # Initialize the InferenceClient
+        client = InferenceClient(
+            "mistralai/Mixtral-8x7B-Instruct-v0.1",
+            token=hf_api_token
+        )
+
         st.button('Clear Chat History', on_click=clear_chat_history)
+
+        # Get available input devices
+        p = pyaudio.PyAudio()
+        input_devices = []
+        for i in range(p.get_device_count()):
+            dev = p.get_device_info_by_index(i)
+            if dev.get('maxInputChannels') > 0:
+                input_devices.append(dev)
+
+        # Device selection
+        device_names = [f"{dev['index']}: {dev['name']}" for dev in input_devices]
+        selected_device = st.selectbox("Select input device:", device_names)
+        selected_device_index = int(selected_device.split(':')[0])
 
     # Initialize session state for messages
     if "messages" not in st.session_state:
@@ -145,34 +227,48 @@ def ai_assistant_page():
     # Display chat history
     chat_container = st.container()
     with chat_container:
-        for message in st.session_state.messages:
+        for i, message in enumerate(st.session_state.messages):
             container_class = "user-container" if message['role'] == "user" else "assistant-container"
-            st.markdown(f"""
-            <div class="{container_class}">
-                <p class="chat-text"><strong>{'You' if message['role'] == 'user' else 'Assistant'}:</strong> {message['content']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-
-    # Speech-to-text option
-    if st.button("Use Voice Input"):
-        speech_text = transcribe_speech()
-        if speech_text:
-            st.session_state.messages.append({"role": "user", "content": speech_text})
-            response = generate_insurance_assistant_response(speech_text, fine_tuning_data, fitness_discount_data)
-            st.session_state.messages.append({"role": "assistant", "content": response})
-            st.experimental_rerun()
+            col1, col2 = st.columns([0.9, 0.1])
+            with col1:
+                st.markdown(f"""
+                <div class="{container_class}">
+                    <p class="chat-text"><strong>{'You' if message['role'] == 'user' else 'Assistant'}:</strong> {message['content']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+            with col2:
+                audio_button_label = f"Play Audio {i}"
+                if st.button("Play", key=audio_button_label):
+                    audio_bytes = text_to_speech(message['content'])
+                    st.audio(audio_bytes, format="audio/mp3")
 
     # Handle user input and generate responses
-    with st.form(key='chat_form', clear_on_submit=True):
-        user_input = st.text_input("Type your message here:", key="user_input")
-        submit_button = st.form_submit_button("Send")
+    user_input = st.text_input("Type your message here:", key="user_input")
+    col1, col2 = st.columns([0.5, 0.5])
+    with col1:
+        send_button = st.button("Send")
+    with col2:
+        speak_button = st.button("Speak")
 
-    if submit_button and user_input:
+    if speak_button:
+        st.write("Recording... Speak now.")
+        audio_file_path = record_audio(selected_device_index)
+        transcribed_text = transcribe_audio(audio_file_path)
+        if transcribed_text:
+            st.session_state.messages.append({"role": "user", "content": transcribed_text})
+            response = generate_insurance_assistant_response(transcribed_text, client, fine_tuning_data, fitness_discount_data)
+            st.session_state.messages.append({"role": "assistant", "content": response})
+            os.unlink(audio_file_path)  # Delete the temporary audio file
+            st.experimental_rerun()
+        else:
+            st.error("Failed to transcribe audio. Please try again.")
+
+    if send_button and user_input:
         st.session_state.messages.append({"role": "user", "content": user_input})
-        response = generate_insurance_assistant_response(user_input, fine_tuning_data, fitness_discount_data)
+        response = generate_insurance_assistant_response(user_input, client, fine_tuning_data, fitness_discount_data)
         st.session_state.messages.append({"role": "assistant", "content": response})
         st.experimental_rerun()
 
 # Run the app
-if __name__ == "__main__":
+if __name__ == "_main_":
     ai_assistant_page()
